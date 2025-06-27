@@ -1,0 +1,44 @@
+{
+  "name": "robotjs",
+  "version": "0.7.1",
+  "description": "Node.js Desktop Automation.",
+  "main": "index.js",
+  "typings": "index.d.ts",
+  "scripts": {
+    "test": "npm rebuild --runtime=electron --target=33.0.0 --disturl=https://electronjs.org/headers --abi=130"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toinane/robotjs.git"
+  },
+  "keywords": [
+    "Automation",
+    "GUI",
+    "mouse",
+    "keyboard",
+    "screenshot",
+    "image",
+    "pixel",
+    "desktop",
+    "robotjs",
+    "screen",
+    "recognition",
+    "autohotkey",
+    "machine",
+    "learning",
+    "color"
+  ],
+  "author": "Jason Stallings",
+  "license": "MIT",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/toinane/robotjs/issues"
+  },
+  "homepage": "https://github.com/toinane/robotjs",
+  "dependencies": {
+    "node-addon-api": "^8.2.1"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.2.0"
+  }
+}

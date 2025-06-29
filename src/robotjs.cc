@@ -1101,6 +1101,15 @@ napi_value GetScreens(napi_env env, napi_callback_info info) {
     return array;
 }
 
+napi_value GetVersion(napi_env env, napi_callback_info info) {
+    // Return the version string from package.json
+    const char* version = "0.7.1"; // This should match package.json version
+    
+    napi_value result;
+    napi_create_string_utf8(env, version, NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 napi_value InitAll(napi_env env, napi_value exports) {
 	napi_value fn;
 
@@ -1166,6 +1175,9 @@ napi_value InitAll(napi_env env, napi_value exports) {
 
 	napi_create_function(env, NULL, 0, GetScreens, NULL, &fn);
 	napi_set_named_property(env, exports, "getScreens", fn);
+
+	napi_create_function(env, NULL, 0, GetVersion, NULL, &fn);
+	napi_set_named_property(env, exports, "getVersion", fn);
 
 	return exports;
 }

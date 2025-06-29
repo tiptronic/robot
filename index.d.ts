@@ -54,5 +54,6 @@ export function getMousePos(): { x: number, y: number }
 export function getPixelColor(x: number, y: number, rgb?: boolean): string | { r: number, g: number, b: number }
 export function getScreenSize(screenIndex?: number): VirtualScreenSize | MonitorSize | null
 export function getScreens(): ScreenInfo[]
+export function getVersion(): string
 
 export var screen: Screen

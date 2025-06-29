@@ -14,6 +14,8 @@ screens.forEach((screen, index) => {
     console.log(`  Position: (${screen.x}, ${screen.y})`);
     console.log(`  Size: ${screen.width} x ${screen.height}`);
     console.log(`  Area: ${screen.width * screen.height} pixels`);
+    console.log(`  Main: ${screen.isMain ? 'Yes' : 'No'}`);
+    console.log(`  Display ID: ${screen.displayId}`);
     console.log("");
 });
 
@@ -24,14 +26,12 @@ console.log(`  Size: ${mainScreenSize.width} x ${mainScreenSize.height}`);
 console.log("");
 
 // Find the main screen in our list
-const mainScreen = screens.find(screen => 
-    screen.width === mainScreenSize.width && 
-    screen.height === mainScreenSize.height
-);
+const mainScreen = screens.find(screen => screen.isMain);
 
 if (mainScreen) {
     console.log("Main screen found in getScreens list:");
     console.log(`  Position: (${mainScreen.x}, ${mainScreen.y})`);
+    console.log(`  Size: ${mainScreen.width} x ${mainScreen.height}`);
 } else {
     console.log("Warning: Main screen not found in getScreens list");
 }

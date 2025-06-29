@@ -21,6 +21,14 @@
             '-framework ApplicationServices',
             '-framework OpenGL'
           ]
+        },
+        'xcode_settings': {
+          'MACOSX_DEPLOYMENT_TARGET': '10.15',
+          'OTHER_CPLUSPLUSFLAGS': ['-std=c++17'],
+          'OTHER_LDFLAGS': ['-Wl,-undefined,dynamic_lookup'],
+          'CLANG_CXX_LANGUAGE_STANDARD': 'c++17',
+          'CLANG_CXX_LIBRARY': 'libc++',
+          'ARCHS': ['x86_64', 'arm64']
         }
       }],
       ['OS == "linux"', {

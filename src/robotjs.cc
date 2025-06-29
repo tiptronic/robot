@@ -756,12 +756,12 @@ void padHex(MMRGBHex color, char* hex)
 }
 
 napi_value GetPixelColor(napi_env env, napi_callback_info info) {
-	size_t argc = 2;
-	napi_value args[2];
+	size_t argc = 3;
+	napi_value args[3];
 	napi_get_cb_info(env, info, &argc, args, NULL, NULL);
 
-	if (argc != 2) {
-		napi_throw_error(env, NULL, "Invalid number of arguments.");
+	if (argc < 2 || argc > 3) {
+		napi_throw_error(env, NULL, "Invalid number of arguments. Expected 2 or 3 arguments.");
 		return NULL;
 	}
 
@@ -769,21 +769,38 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 	napi_get_value_int32(env, args[0], &x);
 	napi_get_value_int32(env, args[1], &y);
 
-	// DISALLOW USING MULTIPLE DISPLAYS
-	// if (!pointVisibleOnMainDisplay(MMSignedPointMake(x, y))) {
-	// 	napi_throw_error(env, NULL, "Requested coordinates are outside the main screen's dimensions.");
-	// 	return NULL;
-	// }
+	// Check if third parameter is provided and is true for RGB format
+	bool returnRGB = false;
+	if (argc == 3) {
+		napi_get_value_bool(env, args[2], &returnRGB);
+	}
 
 	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(x, y, 1, 1));
-	MMRGBHex color = MMRGBHexAtPoint(bitmap, 0, 0);
-	char hex[7];
-	padHex(color, hex);
-	destroyMMBitmap(bitmap);
 
-	napi_value result;
-	napi_create_string_utf8(env, hex, NAPI_AUTO_LENGTH, &result);
-	return result;
+	if (returnRGB) {
+		// Use MMRGBColorAtPoint directly
+		MMRGBColor rgbColor = MMRGBColorAtPoint(bitmap, 0, 0);
+		destroyMMBitmap(bitmap);
+		napi_value obj;
+		napi_create_object(env, &obj);
+		napi_value red, green, blue;
+		napi_create_int32(env, rgbColor.red, &red);
+		napi_create_int32(env, rgbColor.green, &green);
+		napi_create_int32(env, rgbColor.blue, &blue);
+		napi_set_named_property(env, obj, "r", red);
+		napi_set_named_property(env, obj, "g", green);
+		napi_set_named_property(env, obj, "b", blue);
+		return obj;
+	} else {
+		MMRGBHex color = MMRGBHexAtPoint(bitmap, 0, 0);
+		destroyMMBitmap(bitmap);
+		char hex[8]; // Increased size to accommodate # prefix
+		hex[0] = '#';
+		padHex(color, hex + 1); // Start after the # character
+		napi_value result;
+		napi_create_string_utf8(env, hex, NAPI_AUTO_LENGTH, &result);
+		return result;
+	}
 }
 
 napi_value GetScreenSize(napi_env env, napi_callback_info info) {
@@ -1038,9 +1055,10 @@ napi_value GetColor(napi_env env, napi_callback_info info)
 
 	MMRGBHex color = MMRGBHexAtPoint(bitmap, x, y);
 
-	char hex[7];
-	padHex(color, hex);
-
+	char hex[8]; // Increased size to accommodate # prefix
+	hex[0] = '#';
+	padHex(color, hex + 1); // Start after the # character
+	
 	destroyMMBitmap(bitmap);
 
 	napi_value result;
@@ -1051,7 +1069,10 @@ napi_value GetColor(napi_env env, napi_callback_info info)
 napi_value GetScreens(napi_env env, napi_callback_info info) {
     int count = getScreensCount();
     MMSignedRect screens[count];
-    getScreensInfo(screens, count);
+    int displayIDs[count];
+    getScreensInfoWithIDs(screens, displayIDs, count);
+    
+    int mainDisplayID = getMainDisplayID();
 
     napi_value array;
     napi_create_array_with_length(env, count, &array);
@@ -1060,16 +1081,20 @@ napi_value GetScreens(napi_env env, napi_callback_info info) {
         napi_value obj;
         napi_create_object(env, &obj);
 
-        napi_value x, y, width, height;
+        napi_value x, y, width, height, isMain, displayId;
         napi_create_int32(env, screens[i].origin.x, &x);
         napi_create_int32(env, screens[i].origin.y, &y);
         napi_create_int32(env, screens[i].size.width, &width);
         napi_create_int32(env, screens[i].size.height, &height);
+        napi_get_boolean(env, displayIDs[i] == mainDisplayID, &isMain);
+        napi_create_int32(env, displayIDs[i], &displayId);
 
         napi_set_named_property(env, obj, "x", x);
         napi_set_named_property(env, obj, "y", y);
         napi_set_named_property(env, obj, "width", width);
         napi_set_named_property(env, obj, "height", height);
+        napi_set_named_property(env, obj, "isMain", isMain);
+        napi_set_named_property(env, obj, "displayId", displayId);
 
         napi_set_element(env, array, i, obj);
     }

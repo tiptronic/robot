@@ -17,6 +17,8 @@ export interface ScreenInfo {
   y: number
   width: number
   height: number
+  isMain: boolean
+  displayId: number
 }
 
 export interface VirtualScreenSize {
@@ -49,7 +51,7 @@ export function mouseToggle(down?: string, button?: string) : void
 export function dragMouse(x: number, y: number) : void
 export function scrollMouse(x: number, y: number) : void
 export function getMousePos(): { x: number, y: number }
-export function getPixelColor(x: number, y: number): string
+export function getPixelColor(x: number, y: number, rgb?: boolean): string | { r: number, g: number, b: number }
 export function getScreenSize(screenIndex?: number): VirtualScreenSize | MonitorSize | null
 export function getScreens(): ScreenInfo[]
 

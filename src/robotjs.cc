@@ -1103,7 +1103,7 @@ napi_value GetScreens(napi_env env, napi_callback_info info) {
 
 napi_value GetVersion(napi_env env, napi_callback_info info) {
     // Return the version string from package.json
-    const char* version = "0.7.1"; // This should match package.json version
+    const char* version = "0.8.0"; // This should match package.json version
     
     napi_value result;
     napi_create_string_utf8(env, version, NAPI_AUTO_LENGTH, &result);

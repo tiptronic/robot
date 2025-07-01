@@ -46,10 +46,13 @@ describe('Screen', () => {
     expect(mouseColor.r !== undefined).toBeTruthy();
     expect(mouseColor.g !== undefined).toBeTruthy();
     expect(mouseColor.b !== undefined).toBeTruthy();
+    expect(mouseColor.hex !== undefined).toBeTruthy();
     expect(typeof mouseColor.x).toBe('number');
     expect(typeof mouseColor.y).toBe('number');
     expect(typeof mouseColor.r).toBe('number');
     expect(typeof mouseColor.g).toBe('number');
     expect(typeof mouseColor.b).toBe('number');
+    expect(typeof mouseColor.hex).toBe('string');
+    expect(/^#[0-9A-F]{6}$/i.test(mouseColor.hex)).toBeTruthy();
   });
 });

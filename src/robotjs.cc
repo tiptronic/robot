@@ -771,11 +771,20 @@ napi_value GetMouseColor(napi_env env, napi_callback_info info) {
 	napi_create_int32(env, rgb.green, &g);
 	napi_create_int32(env, rgb.blue, &b);
 
+	// Create hex string from RGB values
+	MMRGBHex color = hexFromMMRGB(rgb);
+	char hex[8]; // Size to accommodate # prefix
+	hex[0] = '#';
+	padHex(color, hex + 1); // Start after the # character
+	napi_value hex_value;
+	napi_create_string_utf8(env, hex, NAPI_AUTO_LENGTH, &hex_value);
+
 	napi_set_named_property(env, result, "x", x);
 	napi_set_named_property(env, result, "y", y);
 	napi_set_named_property(env, result, "r", r);
 	napi_set_named_property(env, result, "g", g);
 	napi_set_named_property(env, result, "b", b);
+	napi_set_named_property(env, result, "hex", hex_value);
 
 	return result;
 }

@@ -755,6 +755,31 @@ void padHex(MMRGBHex color, char* hex)
 	snprintf(hex, 7, "%06x", color);
 }
 
+napi_value GetMouseColor(napi_env env, napi_callback_info info) {
+	MMSignedPoint pos = getMousePos();
+	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(pos.x, pos.y, 1, 1));
+	MMRGBColor rgb = MMRGBColorAtPoint(bitmap, 0, 0);
+	destroyMMBitmap(bitmap);
+
+	napi_value result;
+	napi_create_object(env, &result);
+
+	napi_value x, y, r, g, b;
+	napi_create_int32(env, pos.x, &x);
+	napi_create_int32(env, pos.y, &y);
+	napi_create_int32(env, rgb.red, &r);
+	napi_create_int32(env, rgb.green, &g);
+	napi_create_int32(env, rgb.blue, &b);
+
+	napi_set_named_property(env, result, "x", x);
+	napi_set_named_property(env, result, "y", y);
+	napi_set_named_property(env, result, "r", r);
+	napi_set_named_property(env, result, "g", g);
+	napi_set_named_property(env, result, "b", b);
+
+	return result;
+}
+
 napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 	size_t argc = 3;
 	napi_value args[3];
@@ -1175,6 +1200,9 @@ napi_value InitAll(napi_env env, napi_value exports) {
 
 	napi_create_function(env, NULL, 0, GetScreens, NULL, &fn);
 	napi_set_named_property(env, exports, "getScreens", fn);
+
+    napi_create_function(env, NULL, 0, GetMouseColor, NULL, &fn);
+    napi_set_named_property(env, exports, "getMouseColor", fn);
 
 	napi_create_function(env, NULL, 0, GetVersion, NULL, &fn);
 	napi_set_named_property(env, exports, "getVersion", fn);

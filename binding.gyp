@@ -31,6 +31,11 @@
           'ARCHS': ['x86_64', 'arm64']
         }
       }],
+    #   ['OS=="mac"', {
+    #       "xcode_settings": {
+    #         "ARCHS": ["x86_64", "arm64"]
+    #       }
+    #     }]
       ['OS == "linux"', {
         'link_settings': {
           'libraries': [

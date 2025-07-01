@@ -1,15 +1,21 @@
 {
   "name": "robotjs",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Node.js Desktop Automation.",
   "main": "index.js",
   "typings": "index.d.ts",
   "scripts": {
-    "test": "npm rebuild --runtime=electron --target=33.0.0 --disturl=https://electronjs.org/headers --abi=130"
+    "test": "npm rebuild --runtime=electron --target=33.0.0 --disturl=https://electronjs.org/headers --abi=130",
+    "build:prebuilds": "node scripts/build-prebuilds.js"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/tiptronic/robot.git"
+  },
+  "binary": {
+    "module_name": "robotjs",
+    "module_path": "./prebuilds/{platform}-{arch}/",
+    "package_name": "robotjs.node"
   },
   "keywords": [
     "Automation",
@@ -28,7 +34,7 @@
     "learning",
     "color"
   ],
-  "author": "Jason Stallings",
+  "author": "Jason Stallings/Andy Fuchs",
   "license": "MIT",
   "gypfile": true,
   "bugs": {
@@ -36,9 +42,11 @@
   },
   "homepage": "https://github.com/tiptronic/robot",
   "dependencies": {
+    "bindings": "^1.5.0",
     "node-addon-api": "^8.2.1"
   },
   "devDependencies": {
-    "node-gyp": "^10.2.0"
+    "node-gyp": "^10.2.0",
+    "prebuild": "^13.0.1"
   }
 }

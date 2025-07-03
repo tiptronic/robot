@@ -60,11 +60,19 @@ jobs:
 
       - name: Combine x64 + arm64 using lipo
         run: |
+          set -e
+          echo "🧪 Verifying downloaded artifacts..."
+          ls -lh x64/robotjs.node || { echo "❌ Missing x64 binary"; exit 1; }
+          ls -lh arm64/robotjs.node || { echo "❌ Missing arm64 binary"; exit 1; }
+
+          echo "🔀 Combining binaries into a universal binary..."
           mkdir -p build/Release
           lipo -create \
             x64/robotjs.node \
             arm64/robotjs.node \
             -output build/Release/robotjs.universal.node
+
+          echo "✅ Combined binary info:"
           lipo -info build/Release/robotjs.universal.node
 
       - name: Upload universal artifact

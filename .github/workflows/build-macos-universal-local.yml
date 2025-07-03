@@ -63,7 +63,7 @@ jobs:
             -output build/Release/robotjs.universal.node
 
       - name: Upload universal artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: robotjs-universal
           path: build/Release/robotjs.universal.node

@@ -1,0 +1,69 @@
+name: Build universal macOS .node binary
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-12
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js ${{ matrix.arch }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          architecture: ${{ matrix.arch }}
+
+      - name: Build ${{ matrix.arch }} binary
+        run: |
+          BUILD_DIR=build-${{ matrix.arch }}
+          mkdir -p $BUILD_DIR
+          cp binding.gyp binding.gyp.bak
+          sed \
+            -e "s#\"build/Release/#\"$BUILD_DIR/Release/#g" \
+            -e "s#build/Release/#${BUILD_DIR}/Release/#g" \
+            binding.gyp.bak > binding.gyp
+          npm install --build-from-source
+        env:
+          npm_config_build_from_source: true
+
+      - name: Upload ${{ matrix.arch }} artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: robotjs-${{ matrix.arch }}
+          path: build-${{ matrix.arch }}/Release/robotjs.node
+
+  merge:
+    name: Merge architectures
+    runs-on: macos-12
+    needs: build
+
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: robotjs-x64
+          path: x64
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: robotjs-arm64
+          path: arm64
+
+      - name: Combine x64 + arm64 using lipo
+        run: |
+          mkdir -p build/Release
+          lipo -create \
+            x64/robotjs.node \
+            arm64/robotjs.node \
+            -output build/Release/robotjs.universal.node
+
+      - name: Upload universal artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: robotjs-universal
+          path: build/Release/robotjs.universal.node

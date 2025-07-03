@@ -11,24 +11,33 @@ jobs:
         arch: [x64, arm64]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js ${{ matrix.arch }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           architecture: ${{ matrix.arch }}
 
       - name: Build ${{ matrix.arch }} binary
+        shell: bash
         run: |
-          BUILD_DIR=build-${{ matrix.arch }}
-          mkdir -p $BUILD_DIR
+          export BUILD_DIR=build-${{ matrix.arch }}
+          mkdir -p "$BUILD_DIR"
           cp binding.gyp binding.gyp.bak
           sed \
             -e "s#\"build/Release/#\"$BUILD_DIR/Release/#g" \
-            -e "s#build/Release/#${BUILD_DIR}/Release/#g" \
+            -e "s#build/Release/#$BUILD_DIR/Release/#g" \
             binding.gyp.bak > binding.gyp
-          npm install --build-from-source
+
+          if [[ "${{ matrix.arch }}" == "x64" ]]; then
+            echo "🏗 Building for x64 with Rosetta"
+            export ARCHFLAGS="-arch x86_64"
+            arch -x86_64 npm install --build-from-source
+          else
+            echo "🏗 Building for arm64"
+            npm install --build-from-source
+          fi
         env:
           npm_config_build_from_source: true
 
@@ -61,6 +70,7 @@ jobs:
             x64/robotjs.node \
             arm64/robotjs.node \
             -output build/Release/robotjs.universal.node
+          lipo -info build/Release/robotjs.universal.node
 
       - name: Upload universal artifact
         uses: actions/upload-artifact@v4

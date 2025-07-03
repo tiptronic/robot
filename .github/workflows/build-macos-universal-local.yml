@@ -1,4 +1,4 @@
-name: Build universal macOS .node binary
+name: Build universal macOS .node locally
 
 on:
   workflow_dispatch:

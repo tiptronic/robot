@@ -755,11 +755,60 @@ void padHex(MMRGBHex color, char* hex)
 	snprintf(hex, 7, "%06x", color);
 }
 
+// Helper function to create a dummy mouse color result when screen capture fails
+napi_value createDummyMouseColorResult(napi_env env, int32_t x, int32_t y) {
+    napi_value result;
+    napi_create_object(env, &result);
+
+    napi_value x_val, y_val, r_val, g_val, b_val;
+    napi_create_int32(env, x, &x_val);
+    napi_create_int32(env, y, &y_val);
+    napi_create_int32(env, 0, &r_val);  // Dummy red value
+    napi_create_int32(env, 0, &g_val);  // Dummy green value
+    napi_create_int32(env, 0, &b_val);  // Dummy blue value
+
+    // Create dummy hex string
+    napi_value hex_value;
+    napi_create_string_utf8(env, "#000000", NAPI_AUTO_LENGTH, &hex_value);
+
+    napi_set_named_property(env, result, "x", x_val);
+    napi_set_named_property(env, result, "y", y_val);
+    napi_set_named_property(env, result, "r", r_val);
+    napi_set_named_property(env, result, "g", g_val);
+    napi_set_named_property(env, result, "b", b_val);
+    napi_set_named_property(env, result, "hex", hex_value);
+
+    napi_value error_flag;
+    napi_get_boolean(env, true, &error_flag);
+    napi_set_named_property(env, result, "hasError", error_flag);
+
+    return result;
+}
+
 napi_value GetMouseColor(napi_env env, napi_callback_info info) {
-	MMSignedPoint pos = getMousePos();
-	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(pos.x, pos.y, 1, 1));
-	MMRGBColor rgb = MMRGBColorAtPoint(bitmap, 0, 0);
-	destroyMMBitmap(bitmap);
+    // fprintf(stderr, "[DEBUG] GetMouseColor: Starting function\n");
+    
+    MMSignedPoint pos = getMousePos();
+    //fprintf(stderr, "[DEBUG] GetMouseColor: Mouse pos = (%d, %d)\n", pos.x, pos.y);
+    
+    // Check if mouse position is valid (basic bounds check)
+    if (pos.x < 0 || pos.y < 0) {
+        //fprintf(stderr, "[DEBUG] GetMouseColor: Invalid mouse position (%d, %d), returning dummy result\n", pos.x, pos.y);
+        return createDummyMouseColorResult(env, pos.x, pos.y);
+    }
+    
+    MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(pos.x, pos.y, 1, 1));
+    //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap = %p\n", (void*)bitmap);
+    
+    if (!bitmap) {
+        //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap is NULL, returning dummy result\n");
+        return createDummyMouseColorResult(env, pos.x, pos.y);
+    }
+    
+    MMRGBColor rgb = MMRGBColorAtPoint(bitmap, 0, 0);
+    // fprintf(stderr, "[DEBUG] GetMouseColor: RGB = (%d, %d, %d)\n", rgb.red, rgb.green, rgb.blue);
+    
+    destroyMMBitmap(bitmap);
 
 	napi_value result;
 	napi_create_object(env, &result);
@@ -786,6 +835,10 @@ napi_value GetMouseColor(napi_env env, napi_callback_info info) {
 	napi_set_named_property(env, result, "b", b);
 	napi_set_named_property(env, result, "hex", hex_value);
 
+    napi_value error_flag;
+    napi_get_boolean(env, false, &error_flag);
+    napi_set_named_property(env, result, "hasError", error_flag);
+
 	return result;
 }
 
@@ -810,6 +863,11 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 	}
 
 	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(x, y, 1, 1));
+    if (!bitmap) {
+        // napi_throw_error(env, NULL, "Failed to capture screen");
+        //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap is NULL, returning dummy result\n");
+        return createDummyMouseColorResult(env, x, y);
+    }
 
 	if (returnRGB) {
 		// Use MMRGBColorAtPoint directly
@@ -986,6 +1044,10 @@ napi_value CaptureScreen(napi_env env, napi_callback_info info) {
 	}
 
 	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(x, y, w, h));
+    if (!bitmap) {
+        napi_throw_error(env, NULL, "Failed to capture screen");
+        return NULL;
+    }
 	uint32_t bufferSize = bitmap->bytewidth * bitmap->height;
 	napi_value buffer;
 	void* data;
@@ -1080,12 +1142,17 @@ napi_value GetColor(napi_env env, napi_callback_info info)
 
 	MMBitmapRef bitmap = createMMBitmap(img.image, img.width, img.height, img.byteWidth, img.bitsPerPixel, img.bytesPerPixel);
 
+    if (!bitmap) {
+        napi_throw_error(env, NULL, "Failed to create bitmap");
+        return NULL;
+    }
+
 	// Make sure the requested pixel is inside the bitmap.
 	if (!MMBitmapPointInBounds(bitmap, MMPointMake(x, y))) {
 		destroyMMBitmap(bitmap);
 		napi_throw_error(env, NULL, "Requested coordinates are outside the bitmap's dimensions.");
 		return NULL;
-	}
+	}   
 
 	MMRGBHex color = MMRGBHexAtPoint(bitmap, x, y);
 
@@ -1103,7 +1170,10 @@ napi_value GetColor(napi_env env, napi_callback_info info)
 napi_value GetScreens(napi_env env, napi_callback_info info) {
     int count = getScreensCount();
     MMSignedRect screens[count];
+    // std::vector<MMSignedRect> screens(count);
     int displayIDs[count];
+    // std::vector<int> displayIDs(count);
+    // getScreensInfoWithIDs(screens.data(), displayIDs.data(), count);
     getScreensInfoWithIDs(screens, displayIDs, count);
     
     int mainDisplayID = getMainDisplayID();

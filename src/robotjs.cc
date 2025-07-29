@@ -13,9 +13,19 @@
 	#include "xdisplay.h"
 #endif
 
+// Debug logging macros
+#ifdef DEBUG
+#define DEBUG_LOG(fmt, ...) fprintf(stderr, "[DEBUG] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define DEBUG_LOG(fmt, ...) ((void)0)
+#endif
+
 //Global delays.
 int mouseDelay = 10;
 int keyboardDelay = 10;
+
+// Global resource validity flag for cleanup detection
+static bool resources_valid = true;
 
 /*
  __  __
@@ -788,12 +798,24 @@ napi_value createDummyMouseColorResult(napi_env env, int32_t x, int32_t y) {
 napi_value GetMouseColor(napi_env env, napi_callback_info info) {
     // fprintf(stderr, "[DEBUG] GetMouseColor: Starting function\n");
     
+    // Check if resources are still valid (prevents crashes after module cleanup)
+    if (!resources_valid) {
+        //fprintf(stderr, "[DEBUG] GetMouseColor: Resources invalid, returning dummy result\n");
+        return createDummyMouseColorResult(env, 0, 0);
+    }
+    
     MMSignedPoint pos = getMousePos();
     //fprintf(stderr, "[DEBUG] GetMouseColor: Mouse pos = (%d, %d)\n", pos.x, pos.y);
     
     // Check if mouse position is valid (basic bounds check)
     if (pos.x < 0 || pos.y < 0) {
         //fprintf(stderr, "[DEBUG] GetMouseColor: Invalid mouse position (%d, %d), returning dummy result\n", pos.x, pos.y);
+        return createDummyMouseColorResult(env, pos.x, pos.y);
+    }
+    
+    // Double-check resources are still valid before screen capture
+    if (!resources_valid) {
+        //fprintf(stderr, "[DEBUG] GetMouseColor: Resources became invalid, returning dummy result\n");
         return createDummyMouseColorResult(env, pos.x, pos.y);
     }
     
@@ -852,6 +874,12 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 		return NULL;
 	}
 
+	// Check if resources are still valid
+	if (!resources_valid) {
+		//fprintf(stderr, "[DEBUG] GetPixelColor: Resources invalid, returning dummy result\n");
+		return createDummyMouseColorResult(env, 0, 0);
+	}
+
 	int32_t x, y;
 	napi_get_value_int32(env, args[0], &x);
 	napi_get_value_int32(env, args[1], &y);
@@ -862,10 +890,16 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 		napi_get_value_bool(env, args[2], &returnRGB);
 	}
 
+	// Double-check resources before screen capture
+	if (!resources_valid) {
+		//fprintf(stderr, "[DEBUG] GetPixelColor: Resources became invalid, returning dummy result\n");
+		return createDummyMouseColorResult(env, x, y);
+	}
+
 	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(x, y, 1, 1));
     if (!bitmap) {
         // napi_throw_error(env, NULL, "Failed to capture screen");
-        //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap is NULL, returning dummy result\n");
+        //fprintf(stderr, "[DEBUG] GetPixelColor: Bitmap is NULL, returning dummy result\n");
         return createDummyMouseColorResult(env, x, y);
     }
 
@@ -1028,6 +1062,12 @@ napi_value CaptureScreen(napi_env env, napi_callback_info info) {
 	napi_value args[4];
 	napi_get_cb_info(env, info, &argc, args, NULL, NULL);
 
+	// Check if resources are still valid
+	if (!resources_valid) {
+		napi_throw_error(env, NULL, "Screen capture resources are invalid");
+		return NULL;
+	}
+
 	int32_t x, y, w, h;
 
 	if (argc == 4) {
@@ -1041,6 +1081,12 @@ napi_value CaptureScreen(napi_env env, napi_callback_info info) {
 		MMSignedSize displaySize = getMainDisplaySize();
 		w = displaySize.width;
 		h = displaySize.height;
+	}
+
+	// Double-check resources before screen capture
+	if (!resources_valid) {
+		napi_throw_error(env, NULL, "Screen capture resources became invalid");
+		return NULL;
 	}
 
 	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(x, y, w, h));
@@ -1207,15 +1253,33 @@ napi_value GetScreens(napi_env env, napi_callback_info info) {
 
 napi_value GetVersion(napi_env env, napi_callback_info info) {
     // Return the version string from package.json
-    const char* version = "0.8.0"; // This should match package.json version
+    const char* version = "0.8.2"; // This should match package.json version
     
     napi_value result;
     napi_create_string_utf8(env, version, NAPI_AUTO_LENGTH, &result);
     return result;
 }
 
+napi_value IsResourcesValid(napi_env env, napi_callback_info info) {
+    // Return whether the native resources are still valid
+    napi_value result;
+    napi_get_boolean(env, resources_valid, &result);
+    return result;
+}
+
+// Cleanup hook called when module is being unloaded
+void cleanup_hook(void* data) {
+    DEBUG_LOG("cleanup_hook: Marking resources as invalid");
+    resources_valid = false;
+    // Perform any additional cleanup of native resources here
+    // Close display connections, invalidate screen capture contexts, etc.
+}
+
 napi_value InitAll(napi_env env, napi_value exports) {
 	napi_value fn;
+
+	// Register cleanup hook to detect module unloading
+	napi_add_env_cleanup_hook(env, cleanup_hook, nullptr);
 
 	napi_create_function(env, NULL, 0, DragMouse, NULL, &fn);
 	napi_set_named_property(env, exports, "dragMouse", fn);
@@ -1285,6 +1349,9 @@ napi_value InitAll(napi_env env, napi_value exports) {
 
 	napi_create_function(env, NULL, 0, GetVersion, NULL, &fn);
 	napi_set_named_property(env, exports, "getVersion", fn);
+
+	napi_create_function(env, NULL, 0, IsResourcesValid, NULL, &fn);
+	napi_set_named_property(env, exports, "isResourcesValid", fn);
 
 	return exports;
 }

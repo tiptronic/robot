@@ -1,5 +1,13 @@
 #include "screen.h"
 #include "os.h"
+#include <stdio.h>
+
+// Debug logging macros
+#ifdef DEBUG
+#define DEBUG_LOG(fmt, ...) fprintf(stderr, "[DEBUG] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define DEBUG_LOG(fmt, ...) ((void)0)
+#endif
 
 #if defined(IS_MACOSX)
 	#include <ApplicationServices/ApplicationServices.h>
@@ -31,19 +39,29 @@
 
 MMSignedSize getMainDisplaySize(void)
 {
+	DEBUG_LOG("getMainDisplaySize called");
+	
 #if defined(IS_MACOSX)
 	CGDirectDisplayID displayID = CGMainDisplayID();
-	return MMSignedSizeMake(CGDisplayPixelsWide(displayID),
+	DEBUG_LOG("macOS: displayID = %u", (unsigned int)displayID);
+	MMSignedSize size = MMSignedSizeMake(CGDisplayPixelsWide(displayID),
 	                  CGDisplayPixelsHigh(displayID));
+	DEBUG_LOG("macOS: size = %dx%d", size.width, size.height);
+	return size;
 #elif defined(USE_X11)
 	Display *display = XGetMainDisplay();
 	const int screen = DefaultScreen(display);
+	DEBUG_LOG("X11: screen = %d", screen);
 
-	return MMSignedSizeMake((int32_t)DisplayWidth(display, screen),
+	MMSignedSize size = MMSignedSizeMake((int32_t)DisplayWidth(display, screen),
 	                  (int32_t)DisplayHeight(display, screen));
+	DEBUG_LOG("X11: size = %dx%d", size.width, size.height);
+	return size;
 #elif defined(IS_WINDOWS)
-	return MMSignedSizeMake((int32_t)GetSystemMetrics(SM_CXSCREEN),
+	MMSignedSize size = MMSignedSizeMake((int32_t)GetSystemMetrics(SM_CXSCREEN),
 	                  (int32_t)GetSystemMetrics(SM_CYSCREEN));
+	DEBUG_LOG("Windows: size = %dx%d", size.width, size.height);
+	return size;
 #endif
 }
 

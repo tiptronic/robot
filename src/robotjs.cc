@@ -827,6 +827,13 @@ napi_value GetMouseColor(napi_env env, napi_callback_info info) {
         return createDummyMouseColorResult(env, pos.x, pos.y);
     }
     
+    // Additional safety check before accessing bitmap data
+    if (!bitmap->imageBuffer) {
+        //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap buffer is NULL, returning dummy result\n");
+        destroyMMBitmap(bitmap);
+        return createDummyMouseColorResult(env, pos.x, pos.y);
+    }
+    
     MMRGBColor rgb = MMRGBColorAtPoint(bitmap, 0, 0);
     // fprintf(stderr, "[DEBUG] GetMouseColor: RGB = (%d, %d, %d)\n", rgb.red, rgb.green, rgb.blue);
     
@@ -904,6 +911,12 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
     }
 
 	if (returnRGB) {
+		// Additional safety check before accessing bitmap data
+		if (!bitmap->imageBuffer) {
+			destroyMMBitmap(bitmap);
+			return createDummyMouseColorResult(env, x, y);
+		}
+		
 		// Use MMRGBColorAtPoint directly
 		MMRGBColor rgbColor = MMRGBColorAtPoint(bitmap, 0, 0);
 		destroyMMBitmap(bitmap);
@@ -918,6 +931,12 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 		napi_set_named_property(env, obj, "b", blue);
 		return obj;
 	} else {
+		// Additional safety check before accessing bitmap data
+		if (!bitmap->imageBuffer) {
+			destroyMMBitmap(bitmap);
+			return createDummyMouseColorResult(env, x, y);
+		}
+		
 		MMRGBHex color = MMRGBHexAtPoint(bitmap, 0, 0);
 		destroyMMBitmap(bitmap);
 		char hex[8]; // Increased size to accommodate # prefix

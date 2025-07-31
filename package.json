@@ -6,7 +6,9 @@
   "typings": "index.d.ts",
   "scripts": {
     "test": "npm rebuild --runtime=electron --target=33.0.0 --disturl=https://electronjs.org/headers --abi=130",
-    "build:prebuilds": "node scripts/build-prebuilds.js"
+    "build:prebuilds": "node scripts/build-prebuilds.js",
+    "build:intel": "./build-intel.sh",
+    "test:intel": "arch -x86_64 node -e \"const robot = require('./index.js'); console.log('Intel build test:', robot.getMouseColor());\""
   },
   "repository": {
     "type": "git",

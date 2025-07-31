@@ -23,7 +23,18 @@ MMBitmapRef copyMMBitmapFromDisplayInRect(MMSignedRect rect)
 	uint8_t *buffer = NULL;
 	int32_t bufferSize = 0;
 
+	// Safer display ID initialization with additional checks
 	CGDirectDisplayID displayID = CGMainDisplayID();
+	if (displayID == 0) {
+		// Invalid display ID
+		return NULL;
+	}
+	
+	// Additional safety check - verify the display is accessible
+	if (CGDisplayIsOnline(displayID) == false) {
+		// Display is not online
+		return NULL;
+	}
 
 	CGImageRef image = CGDisplayCreateImageForRect(displayID,
 		CGRectMake(rect.origin.x,

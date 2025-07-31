@@ -20,12 +20,32 @@
 #define DEBUG_LOG(fmt, ...) ((void)0)
 #endif
 
+// Thread safety: atomic operations for resource validity
+#include <atomic>
+#include <unistd.h> // for usleep
+
 //Global delays.
 int mouseDelay = 10;
 int keyboardDelay = 10;
 
 // Global resource validity flag for cleanup detection
-static bool resources_valid = true;
+static bool resources_valid = false; // Start as false until properly initialized
+
+// Thread safety: atomic operations for resource validity
+static std::atomic<bool> atomic_resources_valid{false}; // Start as false
+
+// Resource usage counter to prevent cleanup during active operations
+static std::atomic<int> active_operations{0};
+
+// Display initialization flag
+static bool display_initialized = false;
+
+// Forward declarations for enhanced resource management functions
+void beginOperation();
+void endOperation();
+bool canPerformOperation();
+bool isBitmapValid(MMBitmapRef bitmap);
+MMRGBColor safeGetPixelColor(MMBitmapRef bitmap, int x, int y);
 
 /*
  __  __
@@ -765,6 +785,22 @@ void padHex(MMRGBHex color, char* hex)
 	snprintf(hex, 7, "%06x", color);
 }
 
+// Enhanced bitmap validation function
+bool isBitmapValid(MMBitmapRef bitmap) {
+    if (!bitmap) return false;
+    if (!bitmap->imageBuffer) return false;
+    if (bitmap->width <= 0 || bitmap->height <= 0) return false;
+    if (bitmap->bytewidth <= 0) return false;
+    if (bitmap->bitsPerPixel != 24 && bitmap->bitsPerPixel != 32) return false;
+    if (bitmap->bytesPerPixel != bitmap->bitsPerPixel / 8) return false;
+    
+    // Check if buffer size makes sense
+    size_t expectedSize = bitmap->bytewidth * bitmap->height;
+    if (expectedSize == 0) return false;
+    
+    return true;
+}
+
 // Helper function to create a dummy mouse color result when screen capture fails
 napi_value createDummyMouseColorResult(napi_env env, int32_t x, int32_t y) {
     napi_value result;
@@ -798,9 +834,12 @@ napi_value createDummyMouseColorResult(napi_env env, int32_t x, int32_t y) {
 napi_value GetMouseColor(napi_env env, napi_callback_info info) {
     // fprintf(stderr, "[DEBUG] GetMouseColor: Starting function\n");
     
+    beginOperation();
+    
     // Check if resources are still valid (prevents crashes after module cleanup)
-    if (!resources_valid) {
+    if (!canPerformOperation()) {
         //fprintf(stderr, "[DEBUG] GetMouseColor: Resources invalid, returning dummy result\n");
+        endOperation();
         return createDummyMouseColorResult(env, 0, 0);
     }
     
@@ -814,30 +853,28 @@ napi_value GetMouseColor(napi_env env, napi_callback_info info) {
     }
     
     // Double-check resources are still valid before screen capture
-    if (!resources_valid) {
+    if (!canPerformOperation()) {
         //fprintf(stderr, "[DEBUG] GetMouseColor: Resources became invalid, returning dummy result\n");
+        endOperation();
         return createDummyMouseColorResult(env, pos.x, pos.y);
     }
     
     MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(pos.x, pos.y, 1, 1));
     //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap = %p\n", (void*)bitmap);
     
-    if (!bitmap) {
-        //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap is NULL, returning dummy result\n");
+    if (!isBitmapValid(bitmap)) {
+        //fprintf(stderr, "[DEBUG] GetMouseColor: Invalid bitmap, returning dummy result\n");
+        if (bitmap) destroyMMBitmap(bitmap);
+        endOperation();
         return createDummyMouseColorResult(env, pos.x, pos.y);
     }
     
-    // Additional safety check before accessing bitmap data
-    if (!bitmap->imageBuffer) {
-        //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap buffer is NULL, returning dummy result\n");
-        destroyMMBitmap(bitmap);
-        return createDummyMouseColorResult(env, pos.x, pos.y);
-    }
-    
-    MMRGBColor rgb = MMRGBColorAtPoint(bitmap, 0, 0);
+    // Use safe pixel access
+    MMRGBColor rgb = safeGetPixelColor(bitmap, 0, 0);
     // fprintf(stderr, "[DEBUG] GetMouseColor: RGB = (%d, %d, %d)\n", rgb.red, rgb.green, rgb.blue);
     
     destroyMMBitmap(bitmap);
+    endOperation();
 
 	napi_value result;
 	napi_create_object(env, &result);
@@ -868,7 +905,32 @@ napi_value GetMouseColor(napi_env env, napi_callback_info info) {
     napi_get_boolean(env, false, &error_flag);
     napi_set_named_property(env, result, "hasError", error_flag);
 
-	return result;
+	    return result;
+}
+
+// Safe pixel access function with bounds checking and memory protection
+MMRGBColor safeGetPixelColor(MMBitmapRef bitmap, int x, int y) {
+    MMRGBColor defaultColor = {0, 0, 0}; // Black as default
+    
+    if (!isBitmapValid(bitmap)) {
+        return defaultColor;
+    }
+    
+    // Bounds checking
+    if (x < 0 || y < 0 || x >= bitmap->width || y >= bitmap->height) {
+        return defaultColor;
+    }
+    
+    // Memory protection: check if the calculated address is reasonable
+    size_t offset = (bitmap->bytewidth * y) + (x * bitmap->bytesPerPixel);
+    size_t bufferSize = bitmap->bytewidth * bitmap->height;
+    
+    if (offset >= bufferSize || offset + bitmap->bytesPerPixel > bufferSize) {
+        return defaultColor;
+    }
+    
+    // Try to access the pixel safely (without exceptions since they're disabled)
+    return MMRGBColorAtPoint(bitmap, x, y);
 }
 
 napi_value GetPixelColor(napi_env env, napi_callback_info info) {
@@ -904,21 +966,15 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 	}
 
 	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(x, y, 1, 1));
-    if (!bitmap) {
-        // napi_throw_error(env, NULL, "Failed to capture screen");
-        //fprintf(stderr, "[DEBUG] GetPixelColor: Bitmap is NULL, returning dummy result\n");
+    if (!isBitmapValid(bitmap)) {
+        //fprintf(stderr, "[DEBUG] GetPixelColor: Invalid bitmap, returning dummy result\n");
+        if (bitmap) destroyMMBitmap(bitmap);
         return createDummyMouseColorResult(env, x, y);
     }
 
 	if (returnRGB) {
-		// Additional safety check before accessing bitmap data
-		if (!bitmap->imageBuffer) {
-			destroyMMBitmap(bitmap);
-			return createDummyMouseColorResult(env, x, y);
-		}
-		
-		// Use MMRGBColorAtPoint directly
-		MMRGBColor rgbColor = MMRGBColorAtPoint(bitmap, 0, 0);
+		// Use safe pixel access
+		MMRGBColor rgbColor = safeGetPixelColor(bitmap, 0, 0);
 		destroyMMBitmap(bitmap);
 		napi_value obj;
 		napi_create_object(env, &obj);
@@ -931,14 +987,10 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 		napi_set_named_property(env, obj, "b", blue);
 		return obj;
 	} else {
-		// Additional safety check before accessing bitmap data
-		if (!bitmap->imageBuffer) {
-			destroyMMBitmap(bitmap);
-			return createDummyMouseColorResult(env, x, y);
-		}
-		
-		MMRGBHex color = MMRGBHexAtPoint(bitmap, 0, 0);
+		// Use safe pixel access for hex color
+		MMRGBColor rgbColor = safeGetPixelColor(bitmap, 0, 0);
 		destroyMMBitmap(bitmap);
+		MMRGBHex color = hexFromMMRGB(rgbColor);
 		char hex[8]; // Increased size to accommodate # prefix
 		hex[0] = '#';
 		padHex(color, hex + 1); // Start after the # character
@@ -1286,93 +1338,129 @@ napi_value IsResourcesValid(napi_env env, napi_callback_info info) {
     return result;
 }
 
+// Enhanced resource management functions
+void beginOperation() {
+    active_operations.fetch_add(1, std::memory_order_acquire);
+}
+
+void endOperation() {
+    active_operations.fetch_sub(1, std::memory_order_release);
+}
+
+bool canPerformOperation() {
+    return atomic_resources_valid.load(std::memory_order_acquire) && 
+           active_operations.load(std::memory_order_acquire) >= 0;
+}
+
+// Safe display initialization function
+bool initializeDisplay() {
+    if (display_initialized) {
+        return true;
+    }
+    
+    // Test if we can access the main display
+    CGDirectDisplayID displayID = CGMainDisplayID();
+    if (displayID == 0) {
+        return false;
+    }
+    
+    // Test if we can create a simple image
+    CGImageRef testImage = CGDisplayCreateImageForRect(displayID, CGRectMake(0, 0, 1, 1));
+    if (testImage) {
+        CGImageRelease(testImage);
+        display_initialized = true;
+        return true;
+    }
+    
+    return false;
+}
+
 // Cleanup hook called when module is being unloaded
 void cleanup_hook(void* data) {
     DEBUG_LOG("cleanup_hook: Marking resources as invalid");
     resources_valid = false;
+    atomic_resources_valid.store(false, std::memory_order_release);
+    
+    // Wait for active operations to complete (with timeout)
+    int timeout = 1000; // 1 second timeout
+    while (active_operations.load(std::memory_order_acquire) > 0 && timeout > 0) {
+        usleep(1000); // Sleep 1ms
+        timeout--;
+    }
+    
     // Perform any additional cleanup of native resources here
     // Close display connections, invalidate screen capture contexts, etc.
 }
 
 napi_value InitAll(napi_env env, napi_value exports) {
 	napi_value fn;
+	napi_status status;
 
+	// Initialize global state safely
+	// Initialize display first
+	if (!initializeDisplay()) {
+		// If display initialization fails, mark resources as invalid
+		resources_valid = false;
+		atomic_resources_valid.store(false, std::memory_order_release);
+		DEBUG_LOG("Display initialization failed");
+	} else {
+		// Reset global state only if display initialization succeeds
+		resources_valid = true;
+		atomic_resources_valid.store(true, std::memory_order_release);
+		DEBUG_LOG("Display initialization successful");
+	}
+	
+	active_operations.store(0, std::memory_order_release);
+	
 	// Register cleanup hook to detect module unloading
-	napi_add_env_cleanup_hook(env, cleanup_hook, nullptr);
+	status = napi_add_env_cleanup_hook(env, cleanup_hook, nullptr);
+	if (status != napi_ok) {
+		// If cleanup hook fails, continue but log it
+		DEBUG_LOG("Failed to register cleanup hook");
+	}
 
-	napi_create_function(env, NULL, 0, DragMouse, NULL, &fn);
-	napi_set_named_property(env, exports, "dragMouse", fn);
+	// Safe function registration with error handling
+	#define SAFE_REGISTER_FUNCTION(name, func) \
+		status = napi_create_function(env, NULL, 0, func, NULL, &fn); \
+		if (status == napi_ok) { \
+			status = napi_set_named_property(env, exports, name, fn); \
+		} \
+		if (status != napi_ok) { \
+			DEBUG_LOG("Failed to register function: " name); \
+		}
 
-	napi_create_function(env, NULL, 0, UpdateScreenMetrics, NULL, &fn);
-	napi_set_named_property(env, exports, "updateScreenMetrics", fn);
-
-	napi_create_function(env, NULL, 0, MoveMouse, NULL, &fn);
-	napi_set_named_property(env, exports, "moveMouse", fn);
-
-	napi_create_function(env, NULL, 0, MoveMouseSmooth, NULL, &fn);
-	napi_set_named_property(env, exports, "moveMouseSmooth", fn);
-
-	napi_create_function(env, NULL, 0, GetMousePos, NULL, &fn);
-	napi_set_named_property(env, exports, "getMousePos", fn);
-
-	napi_create_function(env, NULL, 0, MouseClick, NULL, &fn);
-	napi_set_named_property(env, exports, "mouseClick", fn);
-
-	napi_create_function(env, NULL, 0, MouseToggle, NULL, &fn);
-	napi_set_named_property(env, exports, "mouseToggle", fn);
-
-	napi_create_function(env, NULL, 0, SetMouseDelay, NULL, &fn);
-	napi_set_named_property(env, exports, "setMouseDelay", fn);
-
-	napi_create_function(env, NULL, 0, ScrollMouse, NULL, &fn);
-	napi_set_named_property(env, exports, "scrollMouse", fn);
-
-	napi_create_function(env, NULL, 0, KeyTap, NULL, &fn);
-	napi_set_named_property(env, exports, "keyTap", fn);
-
-	napi_create_function(env, NULL, 0, KeyToggle, NULL, &fn);
-	napi_set_named_property(env, exports, "keyToggle", fn);
-
-	napi_create_function(env, NULL, 0, TypeString, NULL, &fn);
-	napi_set_named_property(env, exports, "typeString", fn);
-
-	napi_create_function(env, NULL, 0, TypeStringDelayed, NULL, &fn);
-	napi_set_named_property(env, exports, "typeStringDelayed", fn);
-
-	napi_create_function(env, NULL, 0, SetKeyboardDelay, NULL, &fn);
-	napi_set_named_property(env, exports, "setKeyboardDelay", fn);
-
-	napi_create_function(env, NULL, 0, GetPixelColor, NULL, &fn);
-	napi_set_named_property(env, exports, "getPixelColor", fn);
-
-	napi_create_function(env, NULL, 0, GetScreenSize, NULL, &fn);
-	napi_set_named_property(env, exports, "getScreenSize", fn);
-
-	napi_create_function(env, NULL, 0, GetXDisplayName, NULL, &fn);
-	napi_set_named_property(env, exports, "getXDisplayName", fn);
-
-	napi_create_function(env, NULL, 0, SetXDisplayName, NULL, &fn);
-	napi_set_named_property(env, exports, "setXDisplayName", fn);
-
-	napi_create_function(env, NULL, 0, CaptureScreen, NULL, &fn);
-	napi_set_named_property(env, exports, "captureScreen", fn);
-
-	napi_create_function(env, NULL, 0, GetColor, NULL, &fn);
-	napi_set_named_property(env, exports, "getColor", fn);
-
-	napi_create_function(env, NULL, 0, GetScreens, NULL, &fn);
-	napi_set_named_property(env, exports, "getScreens", fn);
-
-    napi_create_function(env, NULL, 0, GetMouseColor, NULL, &fn);
-    napi_set_named_property(env, exports, "getMouseColor", fn);
-
-	napi_create_function(env, NULL, 0, GetVersion, NULL, &fn);
-	napi_set_named_property(env, exports, "getVersion", fn);
-
-	napi_create_function(env, NULL, 0, IsResourcesValid, NULL, &fn);
-	napi_set_named_property(env, exports, "isResourcesValid", fn);
+	SAFE_REGISTER_FUNCTION("dragMouse", DragMouse);
+	SAFE_REGISTER_FUNCTION("updateScreenMetrics", UpdateScreenMetrics);
+	SAFE_REGISTER_FUNCTION("moveMouse", MoveMouse);
+	SAFE_REGISTER_FUNCTION("moveMouseSmooth", MoveMouseSmooth);
+	SAFE_REGISTER_FUNCTION("getMousePos", GetMousePos);
+	SAFE_REGISTER_FUNCTION("mouseClick", MouseClick);
+	SAFE_REGISTER_FUNCTION("mouseToggle", MouseToggle);
+	SAFE_REGISTER_FUNCTION("setMouseDelay", SetMouseDelay);
+	SAFE_REGISTER_FUNCTION("scrollMouse", ScrollMouse);
+	SAFE_REGISTER_FUNCTION("keyTap", KeyTap);
+	SAFE_REGISTER_FUNCTION("keyToggle", KeyToggle);
+	SAFE_REGISTER_FUNCTION("typeString", TypeString);
+	SAFE_REGISTER_FUNCTION("typeStringDelayed", TypeStringDelayed);
+	SAFE_REGISTER_FUNCTION("setKeyboardDelay", SetKeyboardDelay);
+	SAFE_REGISTER_FUNCTION("getPixelColor", GetPixelColor);
+	SAFE_REGISTER_FUNCTION("getScreenSize", GetScreenSize);
+	SAFE_REGISTER_FUNCTION("getXDisplayName", GetXDisplayName);
+	SAFE_REGISTER_FUNCTION("setXDisplayName", SetXDisplayName);
+	SAFE_REGISTER_FUNCTION("captureScreen", CaptureScreen);
+	SAFE_REGISTER_FUNCTION("getColor", GetColor);
+	SAFE_REGISTER_FUNCTION("getScreens", GetScreens);
+	SAFE_REGISTER_FUNCTION("getMouseColor", GetMouseColor);
+	SAFE_REGISTER_FUNCTION("getVersion", GetVersion);
+	SAFE_REGISTER_FUNCTION("isResourcesValid", IsResourcesValid);
 
 	return exports;
 }
 
-NAPI_MODULE(robotjs, InitAll)
+// Enhanced module entry point with error handling
+static napi_value Init(napi_env env, napi_value exports) {
+	// Safe initialization without exceptions
+	return InitAll(env, exports);
+}
+
+NAPI_MODULE(robotjs, Init)

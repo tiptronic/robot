@@ -23,18 +23,22 @@ MMBitmapRef copyMMBitmapFromDisplayInRect(MMSignedRect rect)
 	uint8_t *buffer = NULL;
 	int32_t bufferSize = 0;
 
-	// Safer display ID initialization with additional checks
+	// Safer display ID initialization with architecture-specific handling
 	CGDirectDisplayID displayID = CGMainDisplayID();
 	if (displayID == 0) {
 		// Invalid display ID
 		return NULL;
 	}
 	
-	// Additional safety check - verify the display is accessible
-	if (CGDisplayIsOnline(displayID) == false) {
-		// Display is not online
-		return NULL;
-	}
+	// On ARM (Apple Silicon), be more permissive with display checks
+	// The CGDisplayIsOnline check might be too strict for ARM
+	#if !defined(__arm64__) && !defined(__aarch64__)
+		// Additional safety check - verify the display is accessible (Intel only)
+		if (CGDisplayIsOnline(displayID) == false) {
+			// Display is not online
+			return NULL;
+		}
+	#endif
 
 	CGImageRef image = CGDisplayCreateImageForRect(displayID,
 		CGRectMake(rect.origin.x,

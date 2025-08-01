@@ -1,0 +1,1 @@
+I'm testing robotjs ARM-specific safety improvements. I need to verify that getMouseColor returns real colors instead of dummy results on Apple Silicon.

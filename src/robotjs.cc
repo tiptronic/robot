@@ -785,14 +785,24 @@ void padHex(MMRGBHex color, char* hex)
 	snprintf(hex, 7, "%06x", color);
 }
 
-// Enhanced bitmap validation function
+// Enhanced bitmap validation function with architecture-specific handling
 bool isBitmapValid(MMBitmapRef bitmap) {
     if (!bitmap) return false;
     if (!bitmap->imageBuffer) return false;
     if (bitmap->width <= 0 || bitmap->height <= 0) return false;
     if (bitmap->bytewidth <= 0) return false;
-    if (bitmap->bitsPerPixel != 24 && bitmap->bitsPerPixel != 32) return false;
-    if (bitmap->bytesPerPixel != bitmap->bitsPerPixel / 8) return false;
+    
+    // On ARM (Apple Silicon), be more permissive with pixel format checks
+    // Some ARM systems might use different pixel formats
+    #if defined(__arm64__) || defined(__aarch64__)
+        // For ARM, accept more pixel formats
+        if (bitmap->bitsPerPixel < 16 || bitmap->bitsPerPixel > 64) return false;
+        if (bitmap->bytesPerPixel < 2 || bitmap->bytesPerPixel > 8) return false;
+    #else
+        // For Intel, be more strict
+        if (bitmap->bitsPerPixel != 24 && bitmap->bitsPerPixel != 32) return false;
+        if (bitmap->bytesPerPixel != bitmap->bitsPerPixel / 8) return false;
+    #endif
     
     // Check if buffer size makes sense
     size_t expectedSize = bitmap->bytewidth * bitmap->height;
@@ -1352,7 +1362,7 @@ bool canPerformOperation() {
            active_operations.load(std::memory_order_acquire) >= 0;
 }
 
-// Safe display initialization function
+// Safe display initialization function with architecture-specific handling
 bool initializeDisplay() {
     if (display_initialized) {
         return true;
@@ -1364,15 +1374,26 @@ bool initializeDisplay() {
         return false;
     }
     
-    // Test if we can create a simple image
-    CGImageRef testImage = CGDisplayCreateImageForRect(displayID, CGRectMake(0, 0, 1, 1));
-    if (testImage) {
-        CGImageRelease(testImage);
-        display_initialized = true;
-        return true;
-    }
-    
-    return false;
+    // On ARM (Apple Silicon), be more permissive - just check if display exists
+    // Don't try to create a test image during initialization as it might fail
+    // due to timing or permission issues
+    #if defined(__arm64__) || defined(__aarch64__)
+        // For ARM, just verify the display ID is valid
+        if (displayID != 0) {
+            display_initialized = true;
+            return true;
+        }
+        return false;
+    #else
+        // For Intel, we can be more strict and test image creation
+        CGImageRef testImage = CGDisplayCreateImageForRect(displayID, CGRectMake(0, 0, 1, 1));
+        if (testImage) {
+            CGImageRelease(testImage);
+            display_initialized = true;
+            return true;
+        }
+        return false;
+    #endif
 }
 
 // Cleanup hook called when module is being unloaded

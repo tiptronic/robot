@@ -3,6 +3,19 @@
 <p align="center"><a href="https://travis-ci.org/octalmage/robotjs"><img src="https://api.travis-ci.org/octalmage/robotjs.svg?branch=master"></a> <a href="https://ci.appveyor.com/project/octalmage/robotjs"><img src="https://ci.appveyor.com/api/projects/status/qh2eqb37j7ap6x36?svg=true"></a> <a href="https://www.npmjs.com/package/robotjs"><img src="https://img.shields.io/npm/v/robotjs.svg"></a> <a href="https://gitter.im/octalmage/robotjs?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge"><img src="https://img.shields.io/badge/gitter-join%20chat-blue.svg"></a> <a href="http://waffle.io/octalmage/robotjs"><img src="https://img.shields.io/waffle/label/octalmage/robotjs/ready.svg?maxAge=3600"></a></p>
 
 > Node.js Desktop Automation. Control the mouse, keyboard, and read the screen.
+> This is an experimental project based on the work of:
+> https://github.com/octalmage/robotjs/
+> https://github.com/Toinane/robotjs
+>
+> It is not affiliated with the original RobotJS project, but aims to provide similar functionality with a focus on Mac (atm 2025/07).
+>
+> Most of the API is the same, but some functions have been removed or changed to better suit the needs of this project. Please refer to the [API documentation](https://robotjs.io/docs/syntax) for details.
+> And see the Changeglog for additions: [Changelog](CHANGELOG.md) 
+>
+> Multi-Monitor support has been added, but has some issues on Windows.
+> INTEL support is not available yet, but will be added in the future.
+
+Original Readme:
 
 RobotJS supports Mac, [Windows](https://github.com/octalmage/robotjs/issues/2), and [Linux](https://github.com/octalmage/robotjs/issues/17).
 

@@ -1,15 +1,24 @@
 {
   "name": "robotjs",
-  "version": "0.7.1",
-  "description": "Node.js Desktop Automation.",
+  "version": "0.8.3",
+  "description": "Stream Deck Desktop Automation.",
   "main": "index.js",
   "typings": "index.d.ts",
   "scripts": {
-    "test": "npm rebuild --runtime=electron --target=33.0.0 --disturl=https://electronjs.org/headers --abi=130"
+    "test": "npm rebuild --runtime=electron --target=33.0.0 --disturl=https://electronjs.org/headers --abi=130",
+    "build:prebuilds": "node scripts/build-prebuilds.js",
+    "build:intel": "./build-intel.sh",
+    "build:arm": "./build-arm.sh",
+    "test:intel": "arch -x86_64 node -e \"const robot = require('./index.js'); console.log('Intel build test:', robot.getMouseColor());\""
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/toinane/robotjs.git"
+    "url": "https://github.com/tiptronic/robot.git"
+  },
+  "binary": {
+    "module_name": "robotjs",
+    "module_path": "./prebuilds/{platform}-{arch}/",
+    "package_name": "robotjs.node"
   },
   "keywords": [
     "Automation",
@@ -28,17 +37,19 @@
     "learning",
     "color"
   ],
-  "author": "Jason Stallings",
+  "author": "Jason Stallings/Andy Fuchs",
   "license": "MIT",
   "gypfile": true,
   "bugs": {
-    "url": "https://github.com/toinane/robotjs/issues"
+    "url": "https://github.com/tiptronic/robot/issues"
   },
-  "homepage": "https://github.com/toinane/robotjs",
+  "homepage": "https://github.com/tiptronic/robot",
   "dependencies": {
+    "bindings": "^1.5.0",
     "node-addon-api": "^8.2.1"
   },
   "devDependencies": {
-    "node-gyp": "^10.2.0"
+    "node-gyp": "^10.2.0",
+    "prebuild": "^13.0.1"
   }
 }

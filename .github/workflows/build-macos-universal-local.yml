@@ -1,0 +1,82 @@
+name: Build universal macOS .node locally
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.arch }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          architecture: ${{ matrix.arch }}
+
+      - name: Build ${{ matrix.arch }} binary
+        shell: bash
+        run: |
+          if [[ "${{ matrix.arch }}" == "x64" ]]; then
+            echo "🏗 Building for x64 with Rosetta"
+            export ARCHFLAGS="-arch x86_64"
+            arch -x86_64 npm install --build-from-source --verbose
+          else
+            echo "🏗 Building for arm64"
+            npm install --build-from-source
+          fi
+
+          mkdir -p build-${{ matrix.arch }}/Release
+          cp build/Release/robotjs.node build-${{ matrix.arch }}/Release/robotjs.node
+        env:
+          npm_config_build_from_source: true
+
+      - name: Upload ${{ matrix.arch }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: robotjs-${{ matrix.arch }}
+          path: build-${{ matrix.arch }}/Release/robotjs.node
+
+  merge:
+    name: Merge architectures
+    runs-on: macos-12
+    needs: build
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: robotjs-x64
+          path: x64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: robotjs-arm64
+          path: arm64
+
+      - name: Combine x64 + arm64 using lipo
+        run: |
+          set -e
+          echo "🧪 Verifying downloaded artifacts..."
+          ls -lh x64/robotjs.node || { echo "❌ Missing x64 binary"; exit 1; }
+          ls -lh arm64/robotjs.node || { echo "❌ Missing arm64 binary"; exit 1; }
+
+          echo "🔀 Combining binaries into a universal binary..."
+          mkdir -p build/Release
+          lipo -create \
+            x64/robotjs.node \
+            arm64/robotjs.node \
+            -output build/Release/robotjs.universal.node
+
+          echo "✅ Combined binary info:"
+          lipo -info build/Release/robotjs.universal.node
+
+      - name: Upload universal artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: robotjs-universal
+          path: build/Release/robotjs.universal.node

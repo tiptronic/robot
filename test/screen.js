@@ -36,4 +36,23 @@ describe('Screen', () => {
     expect(screenSize.width !== undefined).toBeTruthy();
     expect(screenSize.height !== undefined).toBeTruthy();
   });
+
+  it('Get mouse color.', function()
+  {
+    var mouseColor = robot.getMouseColor();
+    expect(mouseColor).toBeTruthy();
+    expect(mouseColor.x !== undefined).toBeTruthy();
+    expect(mouseColor.y !== undefined).toBeTruthy();
+    expect(mouseColor.r !== undefined).toBeTruthy();
+    expect(mouseColor.g !== undefined).toBeTruthy();
+    expect(mouseColor.b !== undefined).toBeTruthy();
+    expect(mouseColor.hex !== undefined).toBeTruthy();
+    expect(typeof mouseColor.x).toBe('number');
+    expect(typeof mouseColor.y).toBe('number');
+    expect(typeof mouseColor.r).toBe('number');
+    expect(typeof mouseColor.g).toBe('number');
+    expect(typeof mouseColor.b).toBe('number');
+    expect(typeof mouseColor.hex).toBe('string');
+    expect(/^#[0-9A-F]{6}$/i.test(mouseColor.hex)).toBeTruthy();
+  });
 });

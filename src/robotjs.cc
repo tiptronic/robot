@@ -47,6 +47,15 @@ bool canPerformOperation();
 bool isBitmapValid(MMBitmapRef bitmap);
 MMRGBColor safeGetPixelColor(MMBitmapRef bitmap, int x, int y);
 
+// Error codes for debugging dummy results
+#define ERROR_RESOURCES_INVALID    1
+#define ERROR_INVALID_MOUSE_POS    2
+#define ERROR_BITMAP_INVALID       3
+#define ERROR_DISPLAY_ACCESS       4
+#define ERROR_SUSPEND_WAKEUP       5
+#define ERROR_UNKNOWN              99
+
+
 /*
  __  __
 |  \/  | ___  _   _ ___  ___
@@ -812,7 +821,7 @@ bool isBitmapValid(MMBitmapRef bitmap) {
 }
 
 // Helper function to create a dummy mouse color result when screen capture fails
-napi_value createDummyMouseColorResult(napi_env env, int32_t x, int32_t y) {
+napi_value createDummyMouseColorResult(napi_env env, int32_t x, int32_t y, int32_t errorCode = 0) {
     napi_value result;
     napi_create_object(env, &result);
 
@@ -838,84 +847,85 @@ napi_value createDummyMouseColorResult(napi_env env, int32_t x, int32_t y) {
     napi_get_boolean(env, true, &error_flag);
     napi_set_named_property(env, result, "hasError", error_flag);
 
+    // Add error code for debugging
+    napi_value error_code;
+    napi_create_int32(env, errorCode, &error_code);
+    napi_set_named_property(env, result, "errorCode", error_code);
+
     return result;
 }
 
 napi_value GetMouseColor(napi_env env, napi_callback_info info) {
-    // fprintf(stderr, "[DEBUG] GetMouseColor: Starting function\n");
-    
     beginOperation();
     
     // Check if resources are still valid (prevents crashes after module cleanup)
     if (!canPerformOperation()) {
-        //fprintf(stderr, "[DEBUG] GetMouseColor: Resources invalid, returning dummy result\n");
         endOperation();
-        return createDummyMouseColorResult(env, 0, 0);
+        return createDummyMouseColorResult(env, 0, 0, ERROR_RESOURCES_INVALID);
     }
     
     MMSignedPoint pos = getMousePos();
-    //fprintf(stderr, "[DEBUG] GetMouseColor: Mouse pos = (%d, %d)\n", pos.x, pos.y);
     
     // Check if mouse position is valid (basic bounds check)
     if (pos.x < 0 || pos.y < 0) {
-        //fprintf(stderr, "[DEBUG] GetMouseColor: Invalid mouse position (%d, %d), returning dummy result\n", pos.x, pos.y);
-        return createDummyMouseColorResult(env, pos.x, pos.y);
+        return createDummyMouseColorResult(env, pos.x, pos.y, ERROR_INVALID_MOUSE_POS);
     }
     
     // Double-check resources are still valid before screen capture
     if (!canPerformOperation()) {
-        //fprintf(stderr, "[DEBUG] GetMouseColor: Resources became invalid, returning dummy result\n");
         endOperation();
-        return createDummyMouseColorResult(env, pos.x, pos.y);
+        return createDummyMouseColorResult(env, pos.x, pos.y, ERROR_SUSPEND_WAKEUP);
     }
     
     MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(pos.x, pos.y, 1, 1));
-    //fprintf(stderr, "[DEBUG] GetMouseColor: Bitmap = %p\n", (void*)bitmap);
     
     if (!isBitmapValid(bitmap)) {
-        //fprintf(stderr, "[DEBUG] GetMouseColor: Invalid bitmap, returning dummy result\n");
         if (bitmap) destroyMMBitmap(bitmap);
         endOperation();
-        return createDummyMouseColorResult(env, pos.x, pos.y);
+        return createDummyMouseColorResult(env, pos.x, pos.y, ERROR_BITMAP_INVALID);
     }
     
     // Use safe pixel access
     MMRGBColor rgb = safeGetPixelColor(bitmap, 0, 0);
-    // fprintf(stderr, "[DEBUG] GetMouseColor: RGB = (%d, %d, %d)\n", rgb.red, rgb.green, rgb.blue);
     
     destroyMMBitmap(bitmap);
     endOperation();
 
-	napi_value result;
-	napi_create_object(env, &result);
+    napi_value result;
+    napi_create_object(env, &result);
 
-	napi_value x, y, r, g, b;
-	napi_create_int32(env, pos.x, &x);
-	napi_create_int32(env, pos.y, &y);
-	napi_create_int32(env, rgb.red, &r);
-	napi_create_int32(env, rgb.green, &g);
-	napi_create_int32(env, rgb.blue, &b);
+    napi_value x, y, r, g, b;
+    napi_create_int32(env, pos.x, &x);
+    napi_create_int32(env, pos.y, &y);
+    napi_create_int32(env, rgb.red, &r);
+    napi_create_int32(env, rgb.green, &g);
+    napi_create_int32(env, rgb.blue, &b);
 
-	// Create hex string from RGB values
-	MMRGBHex color = hexFromMMRGB(rgb);
-	char hex[8]; // Size to accommodate # prefix
-	hex[0] = '#';
-	padHex(color, hex + 1); // Start after the # character
-	napi_value hex_value;
-	napi_create_string_utf8(env, hex, NAPI_AUTO_LENGTH, &hex_value);
+    // Create hex string from RGB values
+    MMRGBHex color = hexFromMMRGB(rgb);
+    char hex[8];
+    hex[0] = '#';
+    padHex(color, hex + 1);
+    napi_value hex_value;
+    napi_create_string_utf8(env, hex, NAPI_AUTO_LENGTH, &hex_value);
 
-	napi_set_named_property(env, result, "x", x);
-	napi_set_named_property(env, result, "y", y);
-	napi_set_named_property(env, result, "r", r);
-	napi_set_named_property(env, result, "g", g);
-	napi_set_named_property(env, result, "b", b);
-	napi_set_named_property(env, result, "hex", hex_value);
+    napi_set_named_property(env, result, "x", x);
+    napi_set_named_property(env, result, "y", y);
+    napi_set_named_property(env, result, "r", r);
+    napi_set_named_property(env, result, "g", g);
+    napi_set_named_property(env, result, "b", b);
+    napi_set_named_property(env, result, "hex", hex_value);
 
     napi_value error_flag;
     napi_get_boolean(env, false, &error_flag);
     napi_set_named_property(env, result, "hasError", error_flag);
 
-	    return result;
+    // Add error code (0 for success)
+    napi_value error_code;
+    napi_create_int32(env, 0, &error_code);
+    napi_set_named_property(env, result, "errorCode", error_code);
+
+    return result;
 }
 
 // Safe pixel access function with bounds checking and memory protection
@@ -955,8 +965,7 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 
 	// Check if resources are still valid
 	if (!resources_valid) {
-		//fprintf(stderr, "[DEBUG] GetPixelColor: Resources invalid, returning dummy result\n");
-		return createDummyMouseColorResult(env, 0, 0);
+		return createDummyMouseColorResult(env, 0, 0, ERROR_RESOURCES_INVALID);
 	}
 
 	int32_t x, y;
@@ -971,15 +980,13 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 
 	// Double-check resources before screen capture
 	if (!resources_valid) {
-		//fprintf(stderr, "[DEBUG] GetPixelColor: Resources became invalid, returning dummy result\n");
-		return createDummyMouseColorResult(env, x, y);
+		return createDummyMouseColorResult(env, x, y, ERROR_SUSPEND_WAKEUP);
 	}
 
 	MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(x, y, 1, 1));
     if (!isBitmapValid(bitmap)) {
-        //fprintf(stderr, "[DEBUG] GetPixelColor: Invalid bitmap, returning dummy result\n");
         if (bitmap) destroyMMBitmap(bitmap);
-        return createDummyMouseColorResult(env, x, y);
+        return createDummyMouseColorResult(env, x, y, ERROR_BITMAP_INVALID);
     }
 
 	if (returnRGB) {
@@ -1001,9 +1008,9 @@ napi_value GetPixelColor(napi_env env, napi_callback_info info) {
 		MMRGBColor rgbColor = safeGetPixelColor(bitmap, 0, 0);
 		destroyMMBitmap(bitmap);
 		MMRGBHex color = hexFromMMRGB(rgbColor);
-		char hex[8]; // Increased size to accommodate # prefix
+		char hex[8];
 		hex[0] = '#';
-		padHex(color, hex + 1); // Start after the # character
+		padHex(color, hex + 1);
 		napi_value result;
 		napi_create_string_utf8(env, hex, NAPI_AUTO_LENGTH, &result);
 		return result;
@@ -1334,7 +1341,7 @@ napi_value GetScreens(napi_env env, napi_callback_info info) {
 
 napi_value GetVersion(napi_env env, napi_callback_info info) {
     // Return the version string from package.json
-    const char* version = "0.8.2"; // This should match package.json version
+    const char* version = "0.8.3"; // This should match package.json version
     
     napi_value result;
     napi_create_string_utf8(env, version, NAPI_AUTO_LENGTH, &result);
@@ -1485,3 +1492,4 @@ static napi_value Init(napi_env env, napi_value exports) {
 }
 
 NAPI_MODULE(robotjs, Init)
+

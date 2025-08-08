@@ -1,6 +1,7 @@
 #include "napi.h"
 #include <vector>
 #include <string.h>
+#include <stdlib.h>
 #include "mouse.h"
 #include "deadbeef_rand.h"
 #include "keypress.h"
@@ -1037,7 +1038,12 @@ napi_value GetScreenSize(napi_env env, napi_callback_info info) {
 			return null_value;
 		}
 
-		MMSignedRect screens[count];
+		MMSignedRect* screens = (MMSignedRect*)malloc(count * sizeof(MMSignedRect));
+		if (!screens) {
+			napi_value null_value;
+			napi_get_null(env, &null_value);
+			return null_value;
+		}
 		getScreensInfo(screens, count);
 
 		// Calculate virtual screen bounds
@@ -1069,6 +1075,7 @@ napi_value GetScreenSize(napi_env env, napi_callback_info info) {
 		napi_set_named_property(env, obj, "maxX", maxX_val);
 		napi_set_named_property(env, obj, "maxY", maxY_val);
 
+		free(screens);
 		return obj;
 	}
 	// If screenIndex > 0, return specific monitor size
@@ -1082,7 +1089,12 @@ napi_value GetScreenSize(napi_env env, napi_callback_info info) {
 			return null_value;
 		}
 
-		MMSignedRect screens[count];
+		MMSignedRect* screens = (MMSignedRect*)malloc(count * sizeof(MMSignedRect));
+		if (!screens) {
+			napi_value null_value;
+			napi_get_null(env, &null_value);
+			return null_value;
+		}
 		getScreensInfo(screens, count);
 
 		// screenIndex is 1-based, so subtract 1 for array index
@@ -1100,6 +1112,7 @@ napi_value GetScreenSize(napi_env env, napi_callback_info info) {
 		napi_set_named_property(env, obj, "x", x);
 		napi_set_named_property(env, obj, "y", y);
 
+		free(screens);
 		return obj;
 	}
 	// If screenIndex < 0, return NULL
@@ -1303,14 +1316,13 @@ napi_value GetColor(napi_env env, napi_callback_info info)
 
 napi_value GetScreens(napi_env env, napi_callback_info info) {
     int count = getScreensCount();
-    MMSignedRect screens[count];
-    // std::vector<MMSignedRect> screens(count);
-    int displayIDs[count];
-    // std::vector<int> displayIDs(count);
-    // getScreensInfoWithIDs(screens.data(), displayIDs.data(), count);
-    getScreensInfoWithIDs(screens, displayIDs, count);
-    
-    int mainDisplayID = getMainDisplayID();
+    MMSignedRect* screens = (MMSignedRect*)malloc(count * sizeof(MMSignedRect));
+    if (!screens) {
+        napi_value null_value;
+        napi_get_null(env, &null_value);
+        return null_value;
+    }
+    getScreensInfo(screens, count);
 
     napi_value array;
     napi_create_array_with_length(env, count, &array);
@@ -1336,6 +1348,8 @@ napi_value GetScreens(napi_env env, napi_callback_info info) {
 
         napi_set_element(env, array, i, obj);
     }
+    
+    free(screens);
     return array;
 }
 

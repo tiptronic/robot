@@ -1,13 +1,6 @@
 #include "screen.h"
 #include "os.h"
-#include <stdio.h>
-
-// Debug logging macros
-#ifdef DEBUG
-#define DEBUG_LOG(fmt, ...) fprintf(stderr, "[DEBUG] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
-#else
-#define DEBUG_LOG(fmt, ...) ((void)0)
-#endif
+#include <stdlib.h>
 
 #if defined(IS_MACOSX)
 	#include <ApplicationServices/ApplicationServices.h>
@@ -60,52 +53,6 @@ MMSignedSize getMainDisplaySize(void)
 #elif defined(IS_WINDOWS)
 	MMSignedSize size = MMSignedSizeMake((int32_t)GetSystemMetrics(SM_CXSCREEN),
 	                  (int32_t)GetSystemMetrics(SM_CYSCREEN));
-	DEBUG_LOG("Windows: size = %dx%d", size.width, size.height);
-	return size;
-#endif
-}
-
-int getMainDisplayID(void)
-{
-#if defined(IS_MACOSX)
-	return (int)CGMainDisplayID();
-#elif defined(USE_X11)
-	Display *display = XGetMainDisplay();
-	return DefaultScreen(display);
-#elif defined(IS_WINDOWS)
-	// On Windows, the primary monitor is typically the one at (0,0)
-	// We'll identify it by checking which monitor contains the origin
-	HMONITOR primaryMonitor = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
-	
-	// We need to enumerate monitors to find the index of the primary one
-	int monitorCount = GetSystemMetrics(SM_CMONITORS);
-	MMSignedRect *monitorRects = malloc(monitorCount * sizeof(MMSignedRect));
-	
-	// Reset global variables for enumeration
-	g_monitorIndex = 0;
-	if (g_monitorRects) {
-		free(g_monitorRects);
-	}
-	g_monitorRects = monitorRects;
-	g_monitorCount = monitorCount;
-	
-	// Enumerate monitors
-	EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
-	
-	// Find the primary monitor (the one at origin)
-	int primaryIndex = 0;
-	for (int i = 0; i < monitorCount && i < g_monitorIndex; i++) {
-		if (monitorRects[i].origin.x == 0 && monitorRects[i].origin.y == 0) {
-			primaryIndex = i;
-			break;
-		}
-	}
-	
-	// Clean up
-	free(monitorRects);
-	g_monitorRects = NULL;
-	
-	return primaryIndex;
 #endif
 }
 

@@ -1,5 +1,8 @@
 // Simple test to verify the RobotJS module loads and works
 const robot = require('./index.js');
+const os = require('os');
+
+console.log('OS:', os.platform(), os.arch());
 
 console.log('Testing RobotJS build...');
 

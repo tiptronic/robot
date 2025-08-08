@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "label": "Build RobotJS",
+            "type": "shell",
+            "command": "npx",
+            "args": [
+                "node-gyp",
+                "rebuild"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "isBackground": false
+        }
+    ]
+}

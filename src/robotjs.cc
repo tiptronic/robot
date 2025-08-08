@@ -23,7 +23,9 @@
 
 // Thread safety: atomic operations for resource validity
 #include <atomic>
+#if !defined(IS_WINDOWS)
 #include <unistd.h> // for usleep
+#endif
 
 //Global delays.
 int mouseDelay = 10;
@@ -1336,8 +1338,11 @@ napi_value GetScreens(napi_env env, napi_callback_info info) {
         napi_create_int32(env, screens[i].origin.y, &y);
         napi_create_int32(env, screens[i].size.width, &width);
         napi_create_int32(env, screens[i].size.height, &height);
-        napi_get_boolean(env, displayIDs[i] == mainDisplayID, &isMain);
-        napi_create_int32(env, displayIDs[i], &displayId);
+        
+        // For Windows, we'll use a simple approach - first screen is main
+        bool isMainScreen = (i == 0);
+        napi_get_boolean(env, isMainScreen, &isMain);
+        napi_create_int32(env, i, &displayId);
 
         napi_set_named_property(env, obj, "x", x);
         napi_set_named_property(env, obj, "y", y);
@@ -1389,6 +1394,7 @@ bool initializeDisplay() {
         return true;
     }
     
+#if defined(IS_MACOSX)
     // Test if we can access the main display
     CGDirectDisplayID displayID = CGMainDisplayID();
     if (displayID == 0) {
@@ -1415,6 +1421,19 @@ bool initializeDisplay() {
         }
         return false;
     #endif
+#elif defined(IS_WINDOWS)
+    // For Windows, just check if we can get screen size
+    MMSignedSize screenSize = getMainDisplaySize();
+    if (screenSize.width > 0 && screenSize.height > 0) {
+        display_initialized = true;
+        return true;
+    }
+    return false;
+#else
+    // For other platforms (Linux), assume success
+    display_initialized = true;
+    return true;
+#endif
 }
 
 // Cleanup hook called when module is being unloaded
@@ -1426,7 +1445,11 @@ void cleanup_hook(void* data) {
     // Wait for active operations to complete (with timeout)
     int timeout = 1000; // 1 second timeout
     while (active_operations.load(std::memory_order_acquire) > 0 && timeout > 0) {
-        usleep(1000); // Sleep 1ms
+#if defined(IS_WINDOWS)
+        Sleep(1); // Sleep 1ms on Windows
+#else
+        usleep(1000); // Sleep 1ms on Unix-like systems
+#endif
         timeout--;
     }
     

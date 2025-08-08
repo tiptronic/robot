@@ -118,6 +118,10 @@ MMBitmapRef copyMMBitmapFromDisplayInRect(MMSignedRect rect)
 	screen = GetDC(NULL); /* Get entire screen */
 	if (screen == NULL) return NULL;
 
+	/* Set DPI awareness for better coordinate mapping on high-DPI displays */
+	/* This helps ensure mouse coordinates align with screen capture coordinates */
+	SetProcessDPIAware();
+
 	/* Get screen data in display device context. */
    	dib = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &data, NULL, 0);
 

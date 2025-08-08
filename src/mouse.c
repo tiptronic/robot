@@ -98,6 +98,9 @@ void calculateDeltas(CGEventRef *event, MMSignedPoint point)
 void updateScreenMetrics()
 {
 	#if defined(IS_WINDOWS)
+		/* Set DPI awareness to ensure consistent coordinate mapping */
+		SetProcessDPIAware();
+		
 		vscreenWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
 		vscreenHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 		vscreenMinX = GetSystemMetrics(SM_XVIRTUALSCREEN);
@@ -125,6 +128,9 @@ void moveMouse(MMSignedPoint point)
 	             0, 0, 0, 0, point.x, point.y);
 	XSync(display, false);
 #elif defined(IS_WINDOWS)
+
+	/* Ensure DPI awareness for consistent coordinate mapping */
+	SetProcessDPIAware();
 
 	if(vscreenWidth<0 || vscreenHeight<0)
 		updateScreenMetrics();
@@ -182,6 +188,9 @@ MMSignedPoint getMousePos()
 
 	return MMSignedPointMake(x, y);
 #elif defined(IS_WINDOWS)
+	/* Ensure DPI awareness for consistent coordinate mapping */
+	SetProcessDPIAware();
+	
 	POINT point;
 	GetCursorPos(&point);
 

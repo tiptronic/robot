@@ -880,7 +880,11 @@ napi_value GetMouseColor(napi_env env, napi_callback_info info) {
         return createDummyMouseColorResult(env, pos.x, pos.y, ERROR_SUSPEND_WAKEUP);
     }
     
-    MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(pos.x, pos.y, 1, 1));
+    // Capture a small area around the mouse position to handle potential DPI scaling issues
+    // This helps with coordinate misalignment on Windows with DPI scaling
+    int captureSize = 3; // Capture 3x3 pixel area
+    int offset = captureSize / 2; // Center offset
+    MMBitmapRef bitmap = copyMMBitmapFromDisplayInRect(MMSignedRectMake(pos.x - offset, pos.y - offset, captureSize, captureSize));
     
     if (!isBitmapValid(bitmap)) {
         if (bitmap) destroyMMBitmap(bitmap);
@@ -888,8 +892,8 @@ napi_value GetMouseColor(napi_env env, napi_callback_info info) {
         return createDummyMouseColorResult(env, pos.x, pos.y, ERROR_BITMAP_INVALID);
     }
     
-    // Use safe pixel access
-    MMRGBColor rgb = safeGetPixelColor(bitmap, 0, 0);
+    // Use safe pixel access - get the center pixel of our captured area
+    MMRGBColor rgb = safeGetPixelColor(bitmap, offset, offset);
     
     destroyMMBitmap(bitmap);
     endOperation();
